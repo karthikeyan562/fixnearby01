@@ -1,0 +1,23 @@
+{
+  "name": "fixnearby-root",
+  "version": "1.0.0",
+  "description": "FixNearby Local Service Booking Platform - Full Stack Monorepo",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "start": "node server/src/server.js",
+    "server": "node server/src/server.js",
+    "client": "npm --prefix client run dev",
+    "dev": "npm --prefix client run dev",
+    "build": "cd client && npm install && npm run build",
+    "vercel-build": "cd client && npm install && npm run build",
+    "seed": "node server/src/utils/seed.js",
+    "test": "npm --prefix server test"
+  },
+  "keywords": ["fixnearby", "service-booking", "threejs", "mern"],
+  "author": "FixNearby Team",
+  "license": "ISC"
+}
