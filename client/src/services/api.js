@@ -1,3 +1,5 @@
+import { processAssistantMessageLocal } from './localAssistantService';
+
 const API_BASE = window.location.port === '5000'
   ? '/api'
   : (import.meta.env.VITE_API_URL || 'http://localhost:5000/api');
@@ -80,12 +82,32 @@ export const api = {
     }).then(handleResponse),
 
   // Service Requests
-  createRequest: (body) =>
-    fetch(`${API_BASE}/requests`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-      body: JSON.stringify(body),
-    }).then(handleResponse),
+  createRequest: async (body) => {
+    try {
+      const res = await fetch(`${API_BASE}/requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(body),
+      });
+      return await handleResponse(res);
+    } catch (err) {
+      console.warn('[Requests API] Server unavailable, saving request locally:', err.message);
+      const localReq = {
+        _id: 'req_' + Date.now(),
+        ...body,
+        status: 'open',
+        createdAt: new Date().toISOString(),
+      };
+      try {
+        const existing = JSON.parse(localStorage.getItem('fixnearby_local_requests') || '[]');
+        existing.unshift(localReq);
+        localStorage.setItem('fixnearby_local_requests', JSON.stringify(existing));
+      } catch (e) {
+        // ignore storage error
+      }
+      return { success: true, data: localReq, isLocal: true };
+    }
+  },
 
   getRequests: (params = {}) => {
     const query = new URLSearchParams(params).toString();
@@ -233,12 +255,27 @@ export const api = {
     }).then(handleResponse),
 
   // Voice Assistant Endpoint
-  sendAssistantMessage: (body) =>
-    fetch(`${API_BASE}/assistant/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-      body: JSON.stringify(body),
-    }).then(handleResponse),
+  sendAssistantMessage: async (body) => {
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    const isLocalhostTarget = API_BASE.startsWith('http://localhost') || API_BASE.startsWith('http://127.0.0.1');
+
+    // If running on HTTPS site (e.g. Vercel) and backend is configured to localhost without explicit external API, use local engine
+    if (isHttps && isLocalhostTarget && !import.meta.env.VITE_API_URL) {
+      return processAssistantMessageLocal(body);
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/assistant/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(body),
+      });
+      return await handleResponse(res);
+    } catch (err) {
+      console.warn('[Voice Assistant] Remote endpoint failed, using local assistant intelligence:', err.message);
+      return processAssistantMessageLocal(body);
+    }
+  },
 
   // Upload
   uploadFile: (formData) =>
